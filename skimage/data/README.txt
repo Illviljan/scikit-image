@@ -1,4 +1,4 @@
-This directory contains sample data from scikit-image.
+This directory contains sample data from scikit-image..
 
 By default, it only contains a small subset of the entire dataset.
 
