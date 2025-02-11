@@ -1,12 +1,12 @@
 """watershed.pyx - cython implementation of guts of watershed
 """
 from libc.math cimport sqrt
+from .._shared.fused_numerics cimport np_anyint
 
 cimport numpy as cnp
 cimport cython
 cnp.import_array()
 
-ctypedef cnp.int32_t DTYPE_INT32_t
 ctypedef cnp.int8_t DTYPE_BOOL_t
 
 
@@ -19,7 +19,7 @@ include "heap_watershed.pxi"
 @cython.overflowcheck(False)
 @cython.unraisable_tracebacks(False)
 cdef inline cnp.float64_t _euclid_dist(Py_ssize_t pt0, Py_ssize_t pt1,
-                                       cnp.intp_t[::1] strides) nogil:
+                                       cnp.intp_t[::1] strides) noexcept nogil:
     """Return the Euclidean distance between raveled points pt0 and pt1."""
     cdef cnp.float64_t result = 0
     cdef cnp.float64_t curr = 0
@@ -35,10 +35,12 @@ cdef inline cnp.float64_t _euclid_dist(Py_ssize_t pt0, Py_ssize_t pt1,
 @cython.boundscheck(False)
 @cython.cdivision(True)
 @cython.unraisable_tracebacks(False)
-cdef inline DTYPE_BOOL_t _diff_neighbors(DTYPE_INT32_t[::1] output,
+cdef inline DTYPE_BOOL_t _diff_neighbors(np_anyint[::1] output,
                                          cnp.intp_t[::1] structure,
                                          DTYPE_BOOL_t[::1] mask,
-                                         Py_ssize_t index) nogil:
+                                         Py_ssize_t index,
+                                         np_anyint label,
+                                         ) noexcept nogil:
     """
     Return ``True`` and set ``mask[index]`` to ``False`` if the neighbors of
     ``index`` (as given by the offsets in ``structure``) have more than one
@@ -46,23 +48,19 @@ cdef inline DTYPE_BOOL_t _diff_neighbors(DTYPE_INT32_t[::1] output,
     """
     cdef:
         Py_ssize_t i, neighbor_index
-        DTYPE_INT32_t neighbor_label0, neighbor_label1
+        np_anyint neighbor_label
         Py_ssize_t nneighbors = structure.shape[0]
 
     if not mask[index]:
         return True
 
-    neighbor_label0, neighbor_label1 = 0, 0
     for i in range(nneighbors):
         neighbor_index = structure[i] + index
         if mask[neighbor_index]:  # neighbor not a watershed line
-            if not neighbor_label0:
-                neighbor_label0 = output[neighbor_index]
-            else:
-                neighbor_label1 = output[neighbor_index]
-                if neighbor_label1 and neighbor_label1 != neighbor_label0:
-                    mask[index] = False
-                    return True
+            neighbor_label = output[neighbor_index]
+            if neighbor_label and neighbor_label != label:
+                mask[index] = False
+                return True
     return False
 
 @cython.boundscheck(False)
@@ -73,7 +71,7 @@ def watershed_raveled(cnp.float64_t[::1] image,
                       DTYPE_BOOL_t[::1] mask,
                       cnp.intp_t[::1] strides,
                       cnp.float64_t compactness,
-                      DTYPE_INT32_t[::1] output,
+                      np_anyint[::1] output,
                       DTYPE_BOOL_t wsl):
     """Perform watershed algorithm using a raveled image and neighborhood.
 
@@ -144,12 +142,12 @@ def watershed_raveled(cnp.float64_t[::1] image,
                 if output[elem.index] and elem.index != elem.source:
                     # non-marker, already visited from another neighbor
                     continue
-                if wsl:
-                    # if the current element has different-labeled neighbors and we
-                    # want to preserve watershed lines, we mask it and move on
-                    if _diff_neighbors(output, structure, mask, elem.index):
-                        continue
-                output[elem.index] = output[elem.source]
+
+                # when `wsl` is `True`, label is only set for pixels without a neighbor of different label
+                # NOTE: `_diff_neighbors` sets `mask[elem.index]` to `False` if
+                #        neighbor has different label
+                if compact or not _diff_neighbors(output, structure, mask, elem.index, output[elem.source]):
+                    output[elem.index] = output[elem.source]
 
             for i in range(nneighbors):
                 # get the flattened address of the neighbor
@@ -181,6 +179,15 @@ def watershed_raveled(cnp.float64_t[::1] image,
                 new_elem.age = age
                 new_elem.index = neighbor_index
                 new_elem.source = elem.source
+
+                # The cost adding a neighbor should be at least the cost of its
+                # originating pixel, effectively its marker. This leads to "fairer"
+                # outcomes in edge cases. It prevents one marker from conquering a basin
+                # against other markers with a similar claim, just because it spills
+                # into the basin one step earlier. Instead `age` will distribute the
+                # basin more evenly between contesting markers with the same cost.
+                if new_elem.value < elem.value:
+                    new_elem.value = elem.value
 
                 heappush(hp, &new_elem)
 
