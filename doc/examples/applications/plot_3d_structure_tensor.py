@@ -19,9 +19,7 @@ import numpy as np
 import plotly.express as px
 import plotly.io
 
-from skimage import (
-    data, feature
-)
+import skimage as ski
 
 
 #####################################################################
@@ -29,7 +27,7 @@ from skimage import (
 # ==========
 # This biomedical image is available through `scikit-image`'s data registry.
 
-data = data.kidney()
+data = ski.data.kidney()
 
 #####################################################################
 # What exactly are the shape and size of our 3D multichannel image?
@@ -54,7 +52,7 @@ fig1 = px.imshow(
     data[n_plane // 2, :, :, 1],
     zmin=v_min,
     zmax=v_max,
-    labels={'x': 'col', 'y': 'row', 'color': 'intensity'}
+    labels={'x': 'col', 'y': 'row', 'color': 'intensity'},
 )
 
 plotly.io.show(fig1)
@@ -109,7 +107,7 @@ fig2 = px.imshow(
     zmin=v_min,
     zmax=v_max,
     labels={'x': 'col', 'y': 'row', 'color': 'intensity'},
-    title='Interactive view of bottom slice of sample data.'
+    title='Interactive view of bottom slice of sample data.',
 )
 
 plotly.io.show(fig2)
@@ -125,12 +123,12 @@ plotly.io.show(fig2)
 # the X-Z or Y-Z planes confirms it is reasonable.
 
 sigma = (1, 1.5, 2.5)
-A_elems = feature.structure_tensor(sample, sigma=sigma)
+A_elems = ski.feature.structure_tensor(sample, sigma=sigma)
 
 #####################################################################
 # We can then compute the eigenvalues of the structure tensor.
 
-eigen = feature.structure_tensor_eigenvalues(A_elems)
+eigen = ski.feature.structure_tensor_eigenvalues(A_elems)
 eigen.shape
 
 #####################################################################
@@ -152,7 +150,7 @@ fig3 = px.imshow(
     eigen[:, coords[1], :, :],
     facet_col=0,
     labels={'x': 'col', 'y': 'row', 'facet_col': 'rank'},
-    title=f'Eigenvalues for plane Z = {coords[1]}.'
+    title=f'Eigenvalues for plane Z = {coords[1]}.',
 )
 
 plotly.io.show(fig3)
@@ -161,19 +159,19 @@ plotly.io.show(fig3)
 # We are looking at a local property. Let us consider a tiny neighborhood
 # around the maximum eigenvalue in the above X-Y plane.
 
-eigen[0, coords[1], coords[2] - 2:coords[2] + 1, coords[3] - 2:coords[3] + 1]
+eigen[0, coords[1], coords[2] - 2 : coords[2] + 1, coords[3] - 2 : coords[3] + 1]
 
 #####################################################################
 # If we examine the second-largest eigenvalues in this neighborhood, we can
 # see that they have the same order of magnitude as the largest ones.
 
-eigen[1, coords[1], coords[2] - 2:coords[2] + 1, coords[3] - 2:coords[3] + 1]
+eigen[1, coords[1], coords[2] - 2 : coords[2] + 1, coords[3] - 2 : coords[3] + 1]
 
 #####################################################################
 # In contrast, the third-largest eigenvalues are one order of magnitude
 # smaller.
 
-eigen[2, coords[1], coords[2] - 2:coords[2] + 1, coords[3] - 2:coords[3] + 1]
+eigen[2, coords[1], coords[2] - 2 : coords[2] + 1, coords[3] - 2 : coords[3] + 1]
 
 #####################################################################
 # Let us visualize the slice of sample data in the X-Y plane where the
@@ -184,7 +182,7 @@ fig4 = px.imshow(
     zmin=v_min,
     zmax=v_max,
     labels={'x': 'col', 'y': 'row', 'color': 'intensity'},
-    title=f'Interactive view of plane Z = {coords[1]}.'
+    title=f'Interactive view of plane Z = {coords[1]}.',
 )
 
 plotly.io.show(fig4)
@@ -198,11 +196,7 @@ plotly.io.show(fig4)
 
 subplots = np.dstack((sample[:, coords[2], :], sample[:, :, coords[3]]))
 fig5 = px.imshow(
-    subplots,
-    zmin=v_min,
-    zmax=v_max,
-    facet_col=2,
-    labels={'facet_col': 'longitudinal'}
+    subplots, zmin=v_min, zmax=v_max, facet_col=2, labels={'facet_col': 'longitudinal'}
 )
 
 plotly.io.show(fig5)
