@@ -26,33 +26,30 @@ area?
 # and assume that whatever is not in the nucleus is in the cytoplasm.
 # The protein, "protein A", will be simulated as blobs and segmented.
 
-import random
-
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 from scipy import ndimage as ndi
-from skimage import data, filters, measure, segmentation
+import skimage as ski
 
-random.seed(36)
+rng = np.random.default_rng()
 
 # segment nucleus
-nucleus = data.protein_transport()[0, 0, :, :180]
-smooth = filters.gaussian(nucleus, sigma=1.5)
-thresh = smooth > filters.threshold_otsu(smooth)
+nucleus = ski.data.protein_transport()[0, 0, :, :180]
+smooth = ski.filters.gaussian(nucleus, sigma=1.5)
+thresh = smooth > ski.filters.threshold_otsu(smooth)
 fill = ndi.binary_fill_holes(thresh)
-nucleus_seg = segmentation.clear_border(fill)
+nucleus_seg = ski.segmentation.clear_border(fill)
 
 # protein blobs of varying intensity
 proteinA = np.zeros_like(nucleus, dtype="float64")
 proteinA_seg = np.zeros_like(nucleus, dtype="float64")
 
 for blob_seed in range(10):
-    blobs = data.binary_blobs(180,
-                              blob_size_fraction=0.5,
-                              volume_fraction=(50/(180**2)),
-                              seed=blob_seed)
-    blobs_image = filters.gaussian(blobs, sigma=1.5)*random.randint(50, 256)
+    blobs = ski.data.binary_blobs(
+        180, blob_size_fraction=0.5, volume_fraction=(50 / (180**2)), rng=blob_seed
+    )
+    blobs_image = ski.filters.gaussian(blobs, sigma=1.5) * rng.integers(50, 256)
     proteinA += blobs_image
     proteinA_seg += blobs
 
@@ -90,7 +87,7 @@ for a in ax.ravel():
 # determine what fraction of the protein A segmentation overlaps with the
 # nucleus segmentation.
 
-measure.intersection_coeff(proteinA_seg, nucleus_seg)
+ski.measure.intersection_coeff(proteinA_seg, nucleus_seg)
 
 #####################################################################
 # Manders' Colocalization Coefficient (MCC)
@@ -109,7 +106,7 @@ measure.intersection_coeff(proteinA_seg, nucleus_seg)
 # they are dim compared to some of the spots outside the nucleus, so the MCC is
 # much lower than the overlap coefficient.
 
-measure.manders_coloc_coeff(proteinA, nucleus_seg)
+ski.measure.manders_coloc_coeff(proteinA, nucleus_seg)
 
 #####################################################################
 # After choosing a co-occurence metric, we can apply the same process to
@@ -131,7 +128,6 @@ measure.manders_coloc_coeff(proteinA, nucleus_seg)
 # every pixel to see the relationship between them.
 
 # generating protein B data that is correlated to protein A for demo
-rng = np.random.default_rng()
 proteinB = proteinA + rng.normal(loc=100, scale=10, size=proteinA.shape)
 
 # plot images
@@ -148,17 +144,17 @@ for a in ax.ravel():
     a.set_axis_off()
 
 # plot pixel intensity scatter
-plt.figure()
-plt.scatter(proteinA, proteinB)
-plt.title('Pixel intensity')
-plt.xlabel('Protein A intensity')
-plt.ylabel('Protein B intensity')
+fig, ax = plt.subplots()
+ax.scatter(proteinA, proteinB)
+ax.set_title('Pixel intensity')
+ax.set_xlabel('Protein A intensity')
+ax.set_ylabel('Protein B intensity')
 
 #####################################################################
 # The intensities look linearly correlated so Pearson's Correlation Coefficient
 # would give us a good measure of how strong the association is.
 
-pcc, pval = measure.pearson_corr_coeff(proteinA, proteinB)
+pcc, pval = ski.measure.pearson_corr_coeff(proteinA, proteinB)
 print(f"PCC: {pcc:0.3g}, p-val: {pval:0.3g}")
 
 #####################################################################
@@ -167,3 +163,4 @@ print(f"PCC: {pcc:0.3g}, p-val: {pval:0.3g}")
 # <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.spearmanr.html>`_
 # might give a more accurate measure of the non-linear relationship in that
 # case.
+plt.show()

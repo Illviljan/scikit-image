@@ -6,7 +6,8 @@ foreach ext: cpp_extensions
   py3.extension_module(ext,
     cython_gen_cpp.process(ext + '.pyx'),
     cpp_args: cython_cpp_args,
-    include_directories: [incdir_numpy, '../_shared'],
+    include_directories: ['../_shared'],
+    dependencies: [np_dep],
     install: true,
     subdir: 'skimage/util'
   )
@@ -14,11 +15,13 @@ endforeach
 
 python_sources = [
   '__init__.py',
+  '_backends.py',
   '_invert.py',
   '_label.py',
   '_map_array.py',
   '_montage.py',
   '_regular_grid.py',
+  '_slice_along_axes.py',
   'apply_parallel.py',
   'arraycrop.py',
   'compare.py',
